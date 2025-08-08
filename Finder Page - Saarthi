@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Therapist & School Finder | Saarthi</title>
+  <style>
+    /* Accessible, cohesive Saarthi theme */
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #F6F6F6;
+      color: #263AD1;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #263AD1;
+      color: #FFF;
+      padding: 1.5rem 0;
+      text-align: center;
+    }
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      background: #FFF;
+      box-shadow: 0 2px 8px rgba(38,58,209,0.13);
+      border-radius: 14px;
+      padding: 2rem;
+    }
+    h1, h2 {
+      color: #263AD1;
+      margin-bottom: 0.5rem;
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 2rem;
+    }
+    .search-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+      background: #F9CC48;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .search-bar label {
+      font-weight: bold;
+      color: #263AD1;
+    }
+    .search-bar input, .search-bar select {
+      padding: 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #263AD1;
+      font-size: 1rem;
+      outline: none;
+      background: #FFF;
+      color: #263AD1;
+    }
+    .search-bar input[type="text"] {
+      flex: 2;
+      min-width: 200px;
+    }
+    .search-bar button {
+      background: #263AD1;
+      color: #FFF;
+      border: none;
+      border-radius: 8px;
+      padding: 0.7rem 2rem;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-bar button:hover {
+      background: #F9CC48;
+      color: #263AD1;
+    }
+    .map-placeholder {
+      background: linear-gradient(135deg,#263AD1 65%, #F9CC48 100%);
+      height: 260px;
+      width: 100%;
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: #FFF;
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-bottom: 1.7rem;
+      position: relative;
+    }
+    .pin {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      background: #F9CC48;
+      border: 2px solid #263AD1;
+      border-radius: 50% 50% 50% 0/50% 50% 0 0;
+      left: 60%;
+      top: 40%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      font-size: 1.2rem;
+      color: #263AD1;
+    }
+    .profiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+      gap: 1.5rem;
+    }
+    .card {
+      background: #F6F6F6;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(38,58,209,0.07);
+      padding: 1.2rem;
+      border-left: 6px solid #263AD1;
+      position: relative;
+    }
+    .card .badge {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: #F9CC48;
+      color: #263AD1;
+      font-weight: bold;
+      font-size: 0.89rem;
+      letter-spacing: 0.5px;
+      border-radius: 8px;
+      padding: 6px 13px;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .card .services, .card .contacts, .card .testimonials {
+      margin: 0.6rem 0;
+      font-size: 1rem;
+    }
+    .card .rating {
+      color: #F9CC48;
+      font-size: 1.1rem;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      .profiles { grid-template-columns: 1fr; }
+      .search-bar { flex-direction: column; gap: 0.7rem; }
+    }
+    /* Accessibility: Focus outline */
+    .search-bar input:focus, .search-bar select:focus, .search-bar button:focus {
+      outline: 3px solid #F9CC48;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Saarthi: Therapist & School Finder</h1>
+    <p>Connect with verified, inclusive, location-based professionals and institutions</p>
+  </header>
+  <div class="container">
+    <form class="search-bar" aria-label="Search therapists and schools">
+      <label for="city">City:</label>
+      <input type="text" id="city" name="city" aria-label="City" placeholder="Enter city...">
+      <label for="service">Service Type:</label>
+      <select id="service" name="service" aria-label="Type of Service">
+        <option value="">Any</option>
+        <option value="therapist">Therapist</option>
+        <option value="school">School</option>
+        <option value="specialNeedsTherapist">Special Needs Therapist</option>
+      </select>
+      <label for="age">Age Group:</label>
+      <select id="age" name="age" aria-label="Age Group">
+        <option value="">Any</option>
+        <option value="children">Children</option>
+        <option value="adolescents">Adolescents</option>
+        <option value="adults">Adults</option>
+        <option value="elderly">Elderly</option>
+      </select>
+      <button type="button" onclick="filterProfiles()">Search</button>
+    </form>
+
+    <div class="map-placeholder" aria-label="Map">
+      Interactive Map Placeholder
+      <div class="pin">&#x1F4CD;</div>
+    </div>
+
+    <h2>Verified Institutions & Therapists</h2>
+    <div class="profiles" id="profiles">
+      <!-- Cards dynamically filtered by JavaScript -->
+    </div>
+  </div>
+
+  <script>
+    // Sample data (replace with backend data on full implementation)
+    const allProfiles = [
+      {
+        name: "Sunrise Therapy Center",
+        type: "therapist",
+        city: "Delhi",
+        age: ["children", "adolescents"],
+        badge: true,
+        services: "Speech, Occupational, Behavioral Therapy",
+        contacts: "+91 98765-43210",
+        rating: "4.8",
+        testimonials: "Exceptional support for kids. - Parent"
+      },
+      {
+        name: "Hope Inclusive School",
+        type: "school",
+        city: "Delhi",
+        age: ["children","adolescents"],
+        badge: true,
+        services: "Inclusive education, special needs support",
+        contacts: "+91 89234-56780",
+        rating: "4.5",
+        testimonials: "Welcoming, accessible curriculum. - Therapist"
+      },
+      {
+        name: "Bright Path Therapists",
+        type: "therapist",
+        city: "Mumbai",
+        age: ["adults"],
+        badge: true,
+        services: "Physical, Occupational, Counseling",
+        contacts: "+91 88888-33333",
+        rating: "4.7",
+        testimonials: "Professional, compassionate team. - Client"
+      }
+      // Add more profiles for demonstration
+    ];
+
+    function filterProfiles() {
+      const city = document.getElementById("city").value.toLowerCase().trim();
+      const service = document.getElementById("service").value;
+      const age = document.getElementById("age").value;
+      const container = document.getElementById("profiles");
+      container.innerHTML = "";
+
+      let filtered = allProfiles.filter(profile => {
+        let matchCity = city ? profile.city.toLowerCase().includes(city) : true;
+        let matchService = service ? profile.type === service : true;
+        let matchAge = age ? profile.age.includes(age) : true;
+        return matchCity && matchService && matchAge;
+      });
+      if (filtered.length === 0) {
+        container.innerHTML = "<p>No results found. Try adjusting your filters.</p>";
+        return;
+      }
+      filtered.forEach(profile => {
+        container.innerHTML += `
+          <div class="card">
+            ${profile.badge ? '<span class="badge" aria-label="Verified">✔ Verified</span>' : ''}
+            <h3>${profile.name}</h3>
+            <div class="services"><b>Services:</b> ${profile.services}</div>
+            <div class="contacts"><b>Contact:</b> ${profile.contacts}</div>
+            <div class="rating"><b>Rating:</b> ${profile.rating} ★</div>
+            <div class="testimonials"><em>${profile.testimonials}</em></div>
+          </div>
+        `;
+      });
+    }
+
+    window.onload = filterProfiles; // Show all by default
+  </script>
+</body>
+</html>
