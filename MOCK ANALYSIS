@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""
+CAT 2025 Mock Analyzer - Complete Solution
+One file with GUI + CLI + Analysis + Export
+
+Usage:
+    python cat_analyzer.py          # Run GUI
+    python cat_analyzer.py --cli    # Run CLI version
+
+Requirements: pip install pandas matplotlib seaborn
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+import json
+import os
+import sys
+import argparse
+
+# Try to import GUI libraries (optional)
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox
+    from tkinter.filedialog import asksaveasfilename
+    GUI_AVAILABLE = True
+except ImportError:
+    GUI_AVAILABLE = False
+    print("GUI not available. Use --cli flag for command line version.")
+
+class CATMockAnalyzer:
+    def __init__(self):
+        self.data_dir = "cat_data"
+        os.makedirs(self.data_dir, exist_ok=True)
+
+        # CAT Topics Structure (CATKing aligned)
+        self.topics = {
+            "VARC": [
+                "Reading Comprehension", "Parajumbles", "Para Summary", 
+                "Paracompletion", "Odd Sentence", "Sentence Completion", "Critical Reasoning"
+            ],
+            "DILR": [
+                "Tables", "Bar/Line/Pie Charts", "Caselets", "Seating Arrangement",
+                "Linear Arrangement", "Ranking/Sequencing", "Binary Logic", 
+                "Family Tree", "Constraints Puzzles", "Syllogisms"
+            ],
+            "QA": [
+                "Percentages", "Profit & Loss", "SI/CI", "Ratio & Proportion",
+                "Mixtures", "Time & Work", "Time Speed Distance", "Algebra",
+                "Number System", "Geometry", "Trigonometry", 
+                "Permutation Combination", "Probability"
+            ]
+        }
+
+        self.load_data()
+
+    def load_data(self):
+        """Load existing data or create new DataFrames"""
+        try:
+            self.mock_data = pd.read_csv(f"{self.data_dir}/mock_data.csv")
+        except FileNotFoundError:
+            self.mock_data = pd.DataFrame(columns=[
+                'Date', 'Mock_Name', 'Overall_Score', 'Overall_Percentile',
+                'VARC_Score', 'VARC_Percentile', 'DILR_Score', 'DILR_Percentile',
+                'QA_Score', 'QA_Percentile', 'Test_Series'
+            ])
+
+        try:
+            self.question_data = pd.read_csv(f"{self.data_dir}/question_data.csv")
+        except FileNotFoundError:
+            self.question_data = pd.DataFrame(columns=[
+                'Date', 'Mock_Name', 'Section', 'Topic', 'Question_ID',
+                'Result', 'Time_Minutes', 'Error_Reason', 'Notes'
+            ])
+
+    def save_data(self):
+        """Save data to CSV files"""
+        self.mock_data.to_csv(f"{self.data_dir}/mock_data.csv", index=False)
+        self.question_data.to_csv(f"{self.data_dir}/question_data.csv", index=False)
+
+    def add_mock_data(self, mock_info):
+        """Add new mock data"""
+        new_row = pd.DataFrame([mock_info])
+        self.mock_data = pd.concat([self.mock_data, new_row], ignore_index=True)
+        self.save_data()
+
+    def add_question_data(self, question_info):
+        """Add new question data"""
+        new_row = pd.DataFrame([question_info])
+        self.question_data = pd.concat([self.question_data, new_row], ignore_index=True)
+        self.save_data()
+
+    def get_section_analysis(self):
+        """Analyze section-wise performance"""
+        if self.question_data.empty:
+            return pd.DataFrame()
+
+        analysis = []
+        for section in ['VARC', 'DILR', 'QA']:
+            section_data = self.question_data[self.question_data['Section'] == section]
+
+            if not section_data.empty:
+                total_attempts = len(section_data[section_data['Result'] != 'Unattempted'])
+                correct = len(section_data[section_data['Result'] == 'Correct'])
+                accuracy = correct / total_attempts if total_attempts > 0 else 0
+                avg_time = section_data[section_data['Result'] != 'Unattempted']['Time_Minutes'].mean()
+
+                # Calculate score
+                score = (correct * 3) - (len(section_data[section_data['Result'] == 'Wrong']))
+
+                # Determine status
+                if accuracy >= 0.8 and avg_time <= 1.8:
+                    status = "Strong"
+                elif accuracy >= 0.6:
+                    status = "Focus"
+                else:
+                    status = "Absolute Improve"
+
+                analysis.append({
+                    'Section': section,
+                    'Attempts': total_attempts,
+                    'Correct': correct,
+                    'Accuracy': accuracy,
+                    'Avg_Time': avg_time,
+                    'Score': score,
+                    'Status': status
+                })
+
+        return pd.DataFrame(analysis)
+
+    def get_topic_analysis(self):
+        """Analyze topic-wise performance"""
+        if self.question_data.empty:
+            return pd.DataFrame()
+
+        analysis = []
+        for section in ['VARC', 'DILR', 'QA']:
+            for topic in self.topics[section]:
+                topic_data = self.question_data[
+                    (self.question_data['Section'] == section) & 
+                    (self.question_data['Topic'] == topic)
+                ]
+
+                if not topic_data.empty:
+                    attempted_data = topic_data[topic_data['Result'] != 'Unattempted']
+                    if not attempted_data.empty:
+                        attempts = len(attempted_data)
+                        correct = len(topic_data[topic_data['Result'] == 'Correct'])
+                        accuracy = correct / attempts if attempts > 0 else 0
+                        avg_time = attempted_data['Time_Minutes'].mean()
+                        score = (correct * 3) - len(topic_data[topic_data['Result'] == 'Wrong'])
+
+                        # Determine status
+                        if accuracy >= 0.8 and avg_time <= 1.8:
+                            status = "Strong"
+                        elif accuracy >= 0.6:
+                            status = "Focus"  
+                        else:
+                            status = "Absolute Improve"
+
+                        analysis.append({
+                            'Section': section,
+                            'Topic': topic,
+                            'Attempts': attempts,
+                            'Correct': correct,
+                            'Accuracy': accuracy,
+                            'Avg_Time': avg_time,
+                            'Score': score,
+                            'Status': status
+                        })
+
+        return pd.DataFrame(analysis)
+
+    def generate_progress_report(self):
+        """Generate comprehensive progress report"""
+        if self.mock_data.empty:
+            return "No mock data available. Please add some mock results first."
+
+        report = "\n" + "="*50
+        report += "\n       CAT 2025 MOCK ANALYSIS REPORT"
+        report += "\n" + "="*50
+
+        # Overall Progress
+        latest_mock = self.mock_data.iloc[-1]
+        report += f"\n\n📊 LATEST MOCK: {latest_mock['Mock_Name']}"
+        report += f"\n   Overall: {latest_mock['Overall_Score']:.0f} ({latest_mock['Overall_Percentile']:.1f}%ile)"
+        if latest_mock['VARC_Score'] > 0:
+            report += f"\n   VARC: {latest_mock['VARC_Score']:.0f} ({latest_mock['VARC_Percentile']:.1f}%ile)"
+        if latest_mock['DILR_Score'] > 0:
+            report += f"\n   DILR: {latest_mock['DILR_Score']:.0f} ({latest_mock['DILR_Percentile']:.1f}%ile)"  
+        if latest_mock['QA_Score'] > 0:
+            report += f"\n   QA: {latest_mock['QA_Score']:.0f} ({latest_mock['QA_Percentile']:.1f}%ile)"
+
+        # Section Analysis
+        section_analysis = self.get_section_analysis()
+        if not section_analysis.empty:
+            report += "\n\n🎯 SECTION-WISE STATUS:"
+            for _, row in section_analysis.iterrows():
+                status_emoji = {"Strong": "💪", "Focus": "🎯", "Absolute Improve": "🚨"}
+                report += f"\n   {row['Section']}: {status_emoji[row['Status']]} {row['Status']} "
+                report += f"(Acc: {row['Accuracy']:.1%}, Time: {row['Avg_Time']:.1f}min)"
+
+        # Topic Analysis  
+        topic_analysis = self.get_topic_analysis()
+        if not topic_analysis.empty:
+            # Strong topics
+            strong_topics = topic_analysis[topic_analysis['Status'] == 'Strong']
+            if not strong_topics.empty:
+                report += "\n\n💪 STRONG AREAS:"
+                for _, row in strong_topics.iterrows():
+                    report += f"\n   • {row['Section']}: {row['Topic']} ({row['Accuracy']:.1%})"
+
+            # Focus topics
+            focus_topics = topic_analysis[topic_analysis['Status'] == 'Focus']
+            if not focus_topics.empty:
+                report += "\n\n🎯 FOCUS AREAS:"
+                for _, row in focus_topics.iterrows():
+                    report += f"\n   • {row['Section']}: {row['Topic']} ({row['Accuracy']:.1%})"
+
+            # Absolute improve topics
+            improve_topics = topic_analysis[topic_analysis['Status'] == 'Absolute Improve']
+            if not improve_topics.empty:
+                report += "\n\n🚨 ABSOLUTE IMPROVE:"
+                for _, row in improve_topics.iterrows():
+                    report += f"\n   • {row['Section']}: {row['Topic']} ({row['Accuracy']:.1%})"
+
+        # Progress Trend
+        if len(self.mock_data) > 1:
+            recent_change = latest_mock['Overall_Percentile'] - self.mock_data.iloc[-2]['Overall_Percentile']
+            trend_emoji = "📈" if recent_change > 0 else "📉" if recent_change < 0 else "➡️"
+            report += f"\n\n{trend_emoji} RECENT TREND: {recent_change:+.1f} percentile points"
+
+        # Recommendations
+        report += "\n\n💡 RECOMMENDATIONS:"
+        if latest_mock['Overall_Percentile'] < 80:
+            report += "\n   • Focus on weak areas identified above"
+            report += "\n   • Practice more sectional mocks"
+        if latest_mock['Overall_Percentile'] < 95:
+            report += "\n   • Work on speed and time management"
+            report += "\n   • Identify and avoid silly mistakes"
+        else:
+            report += "\n   • Maintain current performance level"
+            report += "\n   • Fine-tune remaining weak topics"
+
+        report += "\n\n" + "="*50
+        return report
+
+    def create_progress_charts(self):
+        """Create progress visualization charts"""
+        if len(self.mock_data) < 2:
+            return "Need at least 2 mocks for progress charts"
+
+        try:
+            fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+            fig.suptitle('CAT 2025 Mock Progress Analysis', fontsize=16, fontweight='bold')
+
+            # Overall percentile trend
+            axes[0,0].plot(range(len(self.mock_data)), self.mock_data['Overall_Percentile'], 'o-', linewidth=2, markersize=6)
+            axes[0,0].set_title('Overall Percentile Trend', fontweight='bold')
+            axes[0,0].set_ylabel('Percentile')
+            axes[0,0].grid(True, alpha=0.3)
+            axes[0,0].set_xticks(range(len(self.mock_data)))
+            axes[0,0].set_xticklabels([f"M{i+1}" for i in range(len(self.mock_data))])
+
+            # Section percentile trends
+            if self.mock_data['VARC_Percentile'].sum() > 0:
+                axes[0,1].plot(range(len(self.mock_data)), self.mock_data['VARC_Percentile'], 'o-', label='VARC', linewidth=2)
+                axes[0,1].plot(range(len(self.mock_data)), self.mock_data['DILR_Percentile'], 'o-', label='DILR', linewidth=2)
+                axes[0,1].plot(range(len(self.mock_data)), self.mock_data['QA_Percentile'], 'o-', label='QA', linewidth=2)
+                axes[0,1].set_title('Section Percentile Trends', fontweight='bold')
+                axes[0,1].set_ylabel('Percentile')
+                axes[0,1].legend()
+                axes[0,1].grid(True, alpha=0.3)
+                axes[0,1].set_xticks(range(len(self.mock_data)))
+                axes[0,1].set_xticklabels([f"M{i+1}" for i in range(len(self.mock_data))])
+
+            # Score trends
+            axes[1,0].plot(range(len(self.mock_data)), self.mock_data['Overall_Score'], 'o-', linewidth=2, color='purple', markersize=6)
+            axes[1,0].set_title('Overall Score Trend', fontweight='bold')
+            axes[1,0].set_ylabel('Score')
+            axes[1,0].set_xlabel('Mock Number')
+            axes[1,0].grid(True, alpha=0.3)
+            axes[1,0].set_xticks(range(len(self.mock_data)))
+            axes[1,0].set_xticklabels([f"M{i+1}" for i in range(len(self.mock_data))])
+
+            # Topic-wise accuracy (if data available)
+            topic_analysis = self.get_topic_analysis()
+            if not topic_analysis.empty:
+                top_topics = topic_analysis.nlargest(8, 'Accuracy')
+                bars = axes[1,1].barh(range(len(top_topics)), top_topics['Accuracy'])
+                axes[1,1].set_yticks(range(len(top_topics)))
+                axes[1,1].set_yticklabels([f"{row['Section']}: {row['Topic'][:12]}" for _, row in top_topics.iterrows()])
+                axes[1,1].set_title('Top Topic Accuracies', fontweight='bold')
+                axes[1,1].set_xlabel('Accuracy')
+
+                # Color bars based on accuracy
+                for i, bar in enumerate(bars):
+                    acc = top_topics.iloc[i]['Accuracy']
+                    if acc >= 0.8:
+                        bar.set_color('green')
+                    elif acc >= 0.6:
+                        bar.set_color('orange')
+                    else:
+                        bar.set_color('red')
+
+            plt.tight_layout()
+            chart_path = f"{self.data_dir}/progress_charts.png"
+            plt.savefig(chart_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            return f"Charts saved to {chart_path}"
+        except Exception as e:
+            return f"Error creating charts: {e}"
+
+# GUI Version
+class CATMockGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("CAT 2025 Mock Analyzer")
+        self.root.geometry("900x700")
+
+        self.analyzer = CATMockAnalyzer()
+
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+
+        # Create tabs
+        self.create_input_tab()
+        self.create_question_tab()
+        self.create_analysis_tab()
+
+    def create_input_tab(self):
+        # Mock Input Tab
+        self.input_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.input_frame, text="📊 Mock Input")
+
+        # Title
+        title = ttk.Label(self.input_frame, text="CAT Mock Analysis - Enter Your Results", 
+                         font=('Arial', 16, 'bold'))
+        title.grid(row=0, column=0, columnspan=4, pady=15)
+
+        # Input fields
+        fields = [
+            ("Mock Name:", "mock_name", "Mock 1"),
+            ("Overall Score:", "overall_score", "150"),
+            ("Overall Percentile:", "overall_percentile", "85.5"),
+            ("VARC Score (optional):", "varc_score", ""),
+            ("VARC Percentile:", "varc_percentile", ""),
+            ("DILR Score:", "dilr_score", ""),
+            ("DILR Percentile:", "dilr_percentile", ""),
+            ("QA Score:", "qa_score", ""),
+            ("QA Percentile:", "qa_percentile", ""),
+            ("Test Series:", "test_series", "CATKing")
+        ]
+
+        self.input_vars = {}
+        for i, (label, var_name, placeholder) in enumerate(fields, 1):
+            ttk.Label(self.input_frame, text=label, font=('Arial', 10)).grid(
+                row=i, column=0, sticky='w', padx=15, pady=5)
+            self.input_vars[var_name] = tk.StringVar()
+            entry = ttk.Entry(self.input_frame, textvariable=self.input_vars[var_name], width=20)
+            entry.grid(row=i, column=1, padx=15, pady=5, sticky='ew')
+            if placeholder:
+                entry.insert(0, placeholder)
+
+        # Button
+        btn = ttk.Button(self.input_frame, text="📊 Add Mock Data", command=self.add_mock)
+        btn.grid(row=len(fields)+1, column=0, columnspan=2, pady=20)
+
+        # Instructions
+        instructions = ttk.Label(self.input_frame, 
+                               text="💡 Tip: Only Overall Score & Percentile are required. Section details are optional.",
+                               font=('Arial', 9), foreground='blue')
+        instructions.grid(row=len(fields)+2, column=0, columnspan=2, pady=5)
+
+        self.input_frame.columnconfigure(1, weight=1)
+
+    def create_question_tab(self):
+        # Question Input Tab (Optional detailed tracking)
+        self.question_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.question_frame, text="📝 Question Log")
+
+        ttk.Label(self.question_frame, text="Question-wise Analysis (Optional - For Detailed Insights)", 
+                 font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=4, pady=10)
+
+        # Question input fields
+        question_fields = [
+            ("Mock Name:", "q_mock_name"),
+            ("Section:", "q_section"),
+            ("Topic:", "q_topic"),
+            ("Question ID:", "q_question_id"),
+            ("Result:", "q_result"),
+            ("Time (minutes):", "q_time"),
+            ("Error Reason:", "q_error_reason"),
+            ("Notes:", "q_notes")
+        ]
+
+        self.question_vars = {}
+        for i, (label, var_name) in enumerate(question_fields, 1):
+            ttk.Label(self.question_frame, text=label).grid(row=i, column=0, sticky='w', padx=10, pady=2)
+
+            if var_name == "q_section":
+                self.question_vars[var_name] = tk.StringVar()
+                combo = ttk.Combobox(self.question_frame, textvariable=self.question_vars[var_name], 
+                                   values=["VARC", "DILR", "QA"])
+                combo.grid(row=i, column=1, padx=10, pady=2, sticky='ew')
+                combo.bind('<<ComboboxSelected>>', self.update_topics)
+            elif var_name == "q_topic":
+                self.question_vars[var_name] = tk.StringVar()
+                self.topic_combo = ttk.Combobox(self.question_frame, textvariable=self.question_vars[var_name])
+                self.topic_combo.grid(row=i, column=1, padx=10, pady=2, sticky='ew')
+            elif var_name == "q_result":
+                self.question_vars[var_name] = tk.StringVar()
+                ttk.Combobox(self.question_frame, textvariable=self.question_vars[var_name], 
+                           values=["Correct", "Wrong", "Unattempted"]).grid(row=i, column=1, padx=10, pady=2, sticky='ew')
+            else:
+                self.question_vars[var_name] = tk.StringVar()
+                ttk.Entry(self.question_frame, textvariable=self.question_vars[var_name]).grid(row=i, column=1, padx=10, pady=2, sticky='ew')
+
+        ttk.Button(self.question_frame, text="📝 Add Question", command=self.add_question).grid(row=len(question_fields)+1, column=0, columnspan=2, pady=10)
+
+        self.question_frame.columnconfigure(1, weight=1)
+
+    def create_analysis_tab(self):
+        # Analysis Tab
+        self.analysis_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.analysis_frame, text="📈 Analysis")
+
+        ttk.Label(self.analysis_frame, text="CAT 2025 Performance Analysis", 
+                 font=('Arial', 16, 'bold')).pack(pady=10)
+
+        # Buttons
+        button_frame = ttk.Frame(self.analysis_frame)
+        button_frame.pack(pady=10)
+
+        ttk.Button(button_frame, text="📊 Generate Report", command=self.generate_report).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="📈 Create Charts", command=self.create_charts).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="💾 Export Data", command=self.export_data).pack(side='left', padx=5)
+
+        # Text area for results
+        text_frame = ttk.Frame(self.analysis_frame)
+        text_frame.pack(fill='both', expand=True, padx=10, pady=10)
+
+        self.result_text = tk.Text(text_frame, wrap='word', font=('Consolas', 10))
+        scrollbar = ttk.Scrollbar(text_frame, orient='vertical', command=self.result_text.yview)
+        self.result_text.configure(yscrollcommand=scrollbar.set)
+
+        self.result_text.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+    def update_topics(self, event):
+        section = self.question_vars["q_section"].get()
+        if section in self.analyzer.topics:
+            self.topic_combo['values'] = self.analyzer.topics[section]
+
+    def add_mock(self):
+        try:
+            mock_data = {
+                'Date': datetime.now().strftime('%Y-%m-%d'),
+                'Mock_Name': self.input_vars['mock_name'].get(),
+                'Overall_Score': float(self.input_vars['overall_score'].get()),
+                'Overall_Percentile': float(self.input_vars['overall_percentile'].get()),
+                'VARC_Score': float(self.input_vars['varc_score'].get() or 0),
+                'VARC_Percentile': float(self.input_vars['varc_percentile'].get() or 0),
+                'DILR_Score': float(self.input_vars['dilr_score'].get() or 0),
+                'DILR_Percentile': float(self.input_vars['dilr_percentile'].get() or 0),
+                'QA_Score': float(self.input_vars['qa_score'].get() or 0),
+                'QA_Percentile': float(self.input_vars['qa_percentile'].get() or 0),
+                'Test_Series': self.input_vars['test_series'].get() or 'Unknown'
+            }
+
+            self.analyzer.add_mock_data(mock_data)
+            messagebox.showinfo("Success", "✅ Mock data added successfully!")
+
+            # Clear only the main fields
+            for key in ['mock_name', 'overall_score', 'overall_percentile']:
+                self.input_vars[key].set("")
+
+        except ValueError as e:
+            messagebox.showerror("Error", f"Please enter valid numbers for scores and percentiles:\n{e}")
+
+    def add_question(self):
+        try:
+            question_data = {
+                'Date': datetime.now().strftime('%Y-%m-%d'),
+                'Mock_Name': self.question_vars['q_mock_name'].get(),
+                'Section': self.question_vars['q_section'].get(),
+                'Topic': self.question_vars['q_topic'].get(),
+                'Question_ID': self.question_vars['q_question_id'].get(),
+                'Result': self.question_vars['q_result'].get(),
+                'Time_Minutes': float(self.question_vars['q_time'].get() or 0),
+                'Error_Reason': self.question_vars['q_error_reason'].get(),
+                'Notes': self.question_vars['q_notes'].get()
+            }
+
+            self.analyzer.add_question_data(question_data)
+            messagebox.showinfo("Success", "✅ Question data added successfully!")
+
+            # Clear fields
+            for var in self.question_vars.values():
+                var.set("")
+
+        except ValueError as e:
+            messagebox.showerror("Error", f"Please enter valid time in minutes: {e}")
+
+    def generate_report(self):
+        report = self.analyzer.generate_progress_report()
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, report)
+
+    def create_charts(self):
+        try:
+            result = self.analyzer.create_progress_charts()
+            messagebox.showinfo("Success", f"✅ {result}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error creating charts: {e}")
+
+    def export_data(self):
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+            filename = f"CAT_Analysis_{timestamp}.xlsx"
+
+            try:
+                with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                    self.analyzer.mock_data.to_excel(writer, sheet_name='Mock_Data', index=False)
+                    self.analyzer.question_data.to_excel(writer, sheet_name='Question_Data', index=False)
+
+                    section_analysis = self.analyzer.get_section_analysis()
+                    if not section_analysis.empty:
+                        section_analysis.to_excel(writer, sheet_name='Section_Analysis', index=False)
+
+                    topic_analysis = self.analyzer.get_topic_analysis()
+                    if not topic_analysis.empty:
+                        topic_analysis.to_excel(writer, sheet_name='Topic_Analysis', index=False)
+
+                messagebox.showinfo("Success", f"✅ Data exported to {filename}")
+            except ImportError:
+                # Fallback to CSV
+                csv_filename = f"CAT_Analysis_{timestamp}.csv"
+                self.analyzer.mock_data.to_csv(csv_filename, index=False)
+                messagebox.showinfo("Success", f"✅ Data exported to {csv_filename}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error exporting data: {e}")
+
+# CLI Version
+class CATAnalyzerCLI:
+    def __init__(self):
+        self.analyzer = CATMockAnalyzer()
+
+    def add_mock_quick(self):
+        print("\n=== 📊 Quick Mock Entry ===")
+        mock_name = input("Mock name: ") or f"Mock {len(self.analyzer.mock_data) + 1}"
+        overall_score = float(input("Overall score: "))
+        overall_percentile = float(input("Overall percentile: "))
+
+        print("\n🔸 Section details (optional - press Enter to skip):")
+        varc_score = input("VARC score: ")
+        varc_percentile = input("VARC percentile: ")
+        dilr_score = input("DILR score: ")
+        dilr_percentile = input("DILR percentile: ")
+        qa_score = input("QA score: ")
+        qa_percentile = input("QA percentile: ")
+
+        mock_info = {
+            'Date': datetime.now().strftime('%Y-%m-%d'),
+            'Mock_Name': mock_name,
+            'Overall_Score': overall_score,
+            'Overall_Percentile': overall_percentile,
+            'VARC_Score': float(varc_score) if varc_score else 0,
+            'VARC_Percentile': float(varc_percentile) if varc_percentile else 0,
+            'DILR_Score': float(dilr_score) if dilr_score else 0,
+            'DILR_Percentile': float(dilr_percentile) if dilr_percentile else 0,
+            'QA_Score': float(qa_score) if qa_score else 0,
+            'QA_Percentile': float(qa_percentile) if qa_percentile else 0,
+            'Test_Series': 'CATKing'
+        }
+
+        self.analyzer.add_mock_data(mock_info)
+        print("✅ Mock data saved!")
+
+    def show_analysis(self):
+        report = self.analyzer.generate_progress_report()
+        print(report)
+
+    def show_progress(self):
+        if len(self.analyzer.mock_data) < 2:
+            print("❌ Need at least 2 mocks to show progress")
+            return
+
+        print("\n📈 PROGRESS TRACKING:")
+        print("-" * 60)
+        print(f"{'Mock':15} | {'Score':6} | {'%ile':6} | {'Trend':6}")
+        print("-" * 60)
+
+        prev_percentile = None
+        for _, row in self.analyzer.mock_data.iterrows():
+            trend = ""
+            if prev_percentile is not None:
+                change = row['Overall_Percentile'] - prev_percentile
+                trend = f"{change:+.1f}"
+
+            print(f"{row['Mock_Name']:15} | {row['Overall_Score']:6.0f} | {row['Overall_Percentile']:6.1f} | {trend:>6}")
+            prev_percentile = row['Overall_Percentile']
+
+    def export_data(self):
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"CAT_Analysis_{timestamp}.csv"
+        self.analyzer.mock_data.to_csv(filename, index=False)
+        print(f"✅ Data exported to {filename}")
+
+    def menu(self):
+        while True:
+            print("\n" + "="*50)
+            print("          🎯 CAT 2025 MOCK ANALYZER")
+            print("="*50)
+            print("1. 📊 Add Mock Result")
+            print("2. 📈 Show Analysis")
+            print("3. 📊 Show Progress")
+            print("4. 💾 Export Data")
+            print("5. 📈 Create Charts")
+            print("6. ❌ Exit")
+            print("-" * 50)
+
+            choice = input("Choose option (1-6): ").strip()
+
+            if choice == "1":
+                self.add_mock_quick()
+            elif choice == "2":
+                self.show_analysis()
+            elif choice == "3":
+                self.show_progress()
+            elif choice == "4":
+                self.export_data()
+            elif choice == "5":
+                result = self.analyzer.create_progress_charts()
+                print(f"📈 {result}")
+            elif choice == "6":
+                print("\n🚀 Good luck with CAT 2025! All the best! 🎯")
+                break
+            else:
+                print("❌ Invalid choice. Try again.")
+
+def main():
+    parser = argparse.ArgumentParser(description='CAT 2025 Mock Analyzer')
+    parser.add_argument('--cli', action='store_true', help='Run in CLI mode')
+    args = parser.parse_args()
+
+    if args.cli or not GUI_AVAILABLE:
+        # Run CLI version
+        print("🎯 CAT 2025 Mock Analyzer - CLI Mode")
+        analyzer = CATAnalyzerCLI()
+        analyzer.menu()
+    else:
+        # Run GUI version
+        if GUI_AVAILABLE:
+            root = tk.Tk()
+            app = CATMockGUI(root)
+            root.mainloop()
+        else:
+            print("GUI not available. Install tkinter or use --cli flag")
+
+if __name__ == "__main__":
+    main()
